@@ -79,6 +79,9 @@ Class WPOA {
 			),
 		'wpoa_suppress_welcome_email' => 0,								// 0, 1
 		'wpoa_new_user_role' => 'contributor',							// role
+		'wpoa_oxifresh_api_enabled' => 0,									// 0, 1
+		'wpoa_oxifresh_api_id' => '',										// any string
+		'wpoa_oxifresh_api_secret' => '',									// any string
 		'wpoa_google_api_enabled' => 0,									// 0, 1
 		'wpoa_google_api_id' => '',										// any string
 		'wpoa_google_api_secret' => '',									// any string
@@ -393,7 +396,8 @@ Class WPOA {
 	// login (or register and login) a wordpress user based on their oauth identity:
 	function wpoa_login_user($oauth_identity) {
 		// store the user info in the user session so we can grab it later if we need to register the user:
-		$_SESSION["WPOA"]["USER_ID"] = $oauth_identity["id"];
+		$_SESSION["WPOA"]["USER"] = $oauth_identity;
+		$_SESSION["WPOA"]["USER_ID"] = $oauth_identity['id'];
 		// try to find a matching wordpress user for the now-authenticated user's oauth identity:
 		$matched_user = $this->wpoa_match_wordpress_user($oauth_identity);
 		// handle the matched user if there is one:
@@ -550,7 +554,7 @@ Class WPOA {
 	
 	// clears the login state:
 	function wpoa_clear_login_state() {
-		unset($_SESSION["WPOA"]["USER_ID"]);
+		unset($_SESSION["WPOA"]["USER"]);
 		unset($_SESSION["WPOA"]["USER_EMAIL"]);
 		unset($_SESSION["WPOA"]["ACCESS_TOKEN"]);
 		unset($_SESSION["WPOA"]["EXPIRES_IN"]);
@@ -701,6 +705,7 @@ Class WPOA {
 		// generate the login buttons for available providers:
 		// TODO: don't hard-code the buttons/providers here, we want to be able to add more providers without having to update this function...
 		$html = "";
+		$html .= $this->wpoa_login_button("oxifresh", "Oxi Fresh Scheduling Center", $atts);
 		$html .= $this->wpoa_login_button("google", "Google", $atts);
 		$html .= $this->wpoa_login_button("facebook", "Facebook", $atts);
 		$html .= $this->wpoa_login_button("linkedin", "LinkedIn", $atts);
@@ -720,7 +725,7 @@ Class WPOA {
 	function wpoa_login_button($provider, $display_name, $atts) {
 		$html = "";
 		if (get_option("wpoa_" . $provider . "_api_enabled")) {
-			$html .= "<a id='wpoa-login-" . $provider . "' class='wpoa-login-button' href='" . $atts['site_url'] . "?connect=" . $provider . $atts['redirect_to'] . "'>";
+			$html .= "<a id='wpoa-login-" . $provider . "' class='wpoa-login-button' href='" . $atts['site_url'] . "/ssoLogin/?connect=" . $provider . $atts['redirect_to'] . "'>";
 			if ($atts['icon_set'] != 'none') {
 				$html .= "<img src='" . $atts['icon_set_path'] . $provider . ".png' alt='" . $display_name . "' class='icon'></img>";
 			}

@@ -4,16 +4,16 @@
 session_start();
 
 # DEFINE THE OAUTH PROVIDER AND SETTINGS TO USE #
-$_SESSION['WPOA']['PROVIDER'] = 'Google';
+$_SESSION['WPOA']['PROVIDER'] = 'OxiFresh';
 define('HTTP_UTIL', get_option('wpoa_http_util'));
-define('CLIENT_ENABLED', get_option('wpoa_google_api_enabled'));
-define('CLIENT_ID', get_option('wpoa_google_api_id'));
-define('CLIENT_SECRET', get_option('wpoa_google_api_secret'));
+define('CLIENT_ENABLED', get_option('wpoa_oxifresh_api_enabled'));
+define('CLIENT_ID', get_option('wpoa_oxifresh_api_id'));
+define('CLIENT_SECRET', get_option('wpoa_oxifresh_api_secret'));
 define('REDIRECT_URI', rtrim(site_url(), '/') . '/ssoLogin/'); // Added a shell page to accommodate ForceLogin whitelisting
 define('SCOPE', 'profile'); // PROVIDER SPECIFIC: 'profile' is the minimum scope required to get the user's id from Google
-define('URL_AUTH', "https://accounts.google.com/o/oauth2/auth?");
-define('URL_TOKEN', "https://accounts.google.com/o/oauth2/token?");
-define('URL_USER', "https://www.googleapis.com/plus/v1/people/me?");
+define('URL_AUTH', "https://oxifreshdev.com/oauth/authorize?");
+define('URL_TOKEN', "https://oxifreshdev.com/oauth/access_token.json?");
+define('URL_USER', "https://oxifreshdev.com/employees/view.json?");
 # END OF DEFINE THE OAUTH PROVIDER AND SETTINGS TO USE #
 
 // remember the user's last url so we can redirect them back to there after the login ends:
@@ -46,6 +46,7 @@ elseif (isset($_GET['error_message'])) {
 	$this->wpoa_end_login($_GET['error_message']);
 }
 elseif (isset($_GET['code'])) {
+
 	// post-auth phase, verify the state:
 	if ($_SESSION['WPOA']['STATE'] == $_GET['state']) {
 		// get an access token from the third party provider:
@@ -96,6 +97,7 @@ function get_oauth_token($wpoa) {
 		'redirect_uri' => REDIRECT_URI,
 	);
 	$url_params = http_build_query($params);
+
 	switch (strtolower(HTTP_UTIL)) {
 		case 'curl':
 			$url = URL_TOKEN . $url_params;
@@ -109,6 +111,7 @@ function get_oauth_token($wpoa) {
 			curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, (get_option('wpoa_http_util_verify_ssl') == 1 ? 1 : 0));
 			curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, (get_option('wpoa_http_util_verify_ssl') == 1 ? 2 : 0));
 			$result = curl_exec($curl);
+
 			break;
 		case 'stream-context':
 			$url = rtrim(URL_TOKEN, "?");
@@ -157,11 +160,13 @@ function get_oauth_identity($wpoa) {
 			$url = URL_USER . $url_params; // TODO: we probably want to send this using a curl_setopt...
 			$curl = curl_init();
 			curl_setopt($curl, CURLOPT_URL, $url);
-			// PROVIDER NORMALIZATION: Github/Reddit require a User-Agent here...
-			// PROVIDER NORMALIZATION: PayPal/Reddit require that we send the access token via a bearer header, PayPal also requires a Content-Type: application/json header, LinkedIn requires an x-li-format: json header...
 			curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+			curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, (get_option('wpoa_http_util_verify_ssl') == 1 ? 1 : 0));
+			curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, (get_option('wpoa_http_util_verify_ssl') == 1 ? 2 : 0));
 			$result = curl_exec($curl);
+
 			$result_obj = json_decode($result, true);
+
 			break;
 		case 'stream-context':
 			$url = rtrim(URL_USER, "?");
@@ -183,10 +188,16 @@ function get_oauth_identity($wpoa) {
 	// parse and return the user's oauth identity:
 	$oauth_identity = array();
 	$oauth_identity['provider'] = $_SESSION['WPOA']['PROVIDER'];
-	$oauth_identity['id'] = $result_obj['id']; // PROVIDER SPECIFIC: Google returns the user's OAuth identity as id
-	//$oauth_identity['email'] = $result_obj['emails'][0]['value']; // PROVIDER SPECIFIC: Google returns an array of email addresses. To respect privacy we currently don't collect the user's email address.
-	if (!$oauth_identity['id']) {
-		$wpoa->wpoa_end_login("Sorry, we couldn't log you in. User identity was not found. Please notify the admin or try again later.");
+
+	$oauth_identity['user_login'] = $result_obj['employee']['username'];
+	$oauth_identity['email'] = $result_obj['employee']['email'];
+	$oauth_identity['user_nicename'] = $result_obj['employee']['first_name'].' '.$result_obj['employee']['last_name'];
+	$oauth_identity['display_name'] = $oauth_identity['user_nicename'] ;
+	$oauth_identity['franchise_id'] = $result_obj['employee']['username'];
+	$oauth_identity['scheduling_center_group_id'] = $result_obj['employee']['group_id'];
+	$oauth_identity['id'] = $oauth_identity['user_login'] ;
+	if (!$oauth_identity['user_login']) {
+		$wpoa->wpoa_end_login("Sorry, we couldn't log you in. The Scheduling Center did not provide a username to login with.");
 	}
 	return $oauth_identity;
 }
